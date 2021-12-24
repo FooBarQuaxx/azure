@@ -126,6 +126,8 @@ from ansible_collections.azure.azcollection.plugins.module_utils.azure_rm_common
 from ansible.errors import AnsibleParserError, AnsibleError
 from ansible.module_utils.parsing.convert_bool import boolean
 from ansible.module_utils._text import to_native, to_bytes, to_text
+from ansible.template import Templar
+
 from itertools import chain
 
 try:
@@ -216,12 +218,12 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
         self._filters = self.get_option('exclude_host_filters') + self.get_option('default_host_filters')
 
         try:
-            self._credential_setup()
+            self._credential_setup(loader)
             self._get_hosts()
         except Exception:
             raise
 
-    def _credential_setup(self):
+    def _credential_setup(self, loader):
         auth_options = dict(
             auth_source=self.get_option('auth_source'),
             profile=self.get_option('profile'),
@@ -236,6 +238,14 @@ class InventoryModule(BaseInventoryPlugin, Constructable):
             api_profile=self.get_option('api_profile'),
             adfs_authority_url=self.get_option('adfs_authority_url')
         )
+
+        t = Templar(loader=loader)
+
+        for auth_opt in auth_options:
+            if t.is_template(self.get_option(auth_opt)):
+                auth_options[auth_opt] = t.template(variable=self.get_option(auth_opt), disable_lookups=False)
+            else:
+                auth_options[auth_opt] = self.get_option(auth_opt)
 
         self.azure_auth = AzureRMAuth(**auth_options)
 
